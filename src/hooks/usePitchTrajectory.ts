@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 // Constants
 const GRAVITY = 9.81; // m/s^2
 const FEET_TO_METERS = 0.3048;
-const MILES_TO_METERS = 1609.34;
+const MILES_TO_METERS = 1609.344;
 const MPH_TO_MPS = MILES_TO_METERS / 3600;
 const INCHES_TO_METERS = 0.0254;
 
@@ -30,18 +30,26 @@ interface PitchTrajectory {
 
 /**
  * Custom hook to calculate the trajectory of a baseball pitch, ensuring it
- * passes through the center of the strike zone at z=0.
+ * passes through the specified target point at z=0.
  * Uses scene coordinates: Y=up, Z=towards camera/catcher (+Z towards catcher).
  *
  * @param velocityMPH Initial velocity magnitude in MPH.
  * @param ivbInches Induced Vertical Break in inches (spin-induced upward deviation).
  * @param hbInches Horizontal Break in inches (positive is right from catcher's view).
+ * @param targetX_m Target X coordinate (meters) at the z=0 plane.
+ * @param targetY_m Target Y coordinate (meters) at the z=0 plane.
  * @returns An object containing the release point, flight time, initial velocity, and a function to get position at time t.
  */
-const usePitchTrajectory = (velocityMPH: number, ivbInches: number, hbInches: number): PitchTrajectory => {
+const usePitchTrajectory = (
+  velocityMPH: number,
+  ivbInches: number,
+  hbInches: number,
+  targetX_m: number, // Added target X
+  targetY_m: number  // Added target Y
+): PitchTrajectory => {
 
   const trajectoryData = useMemo((): PitchTrajectory => {
-    console.log('[usePitchTrajectory] Recalculating trajectory to hit center strike zone (Z towards catcher)...');
+    console.log(`[usePitchTrajectory] Recalculating trajectory to hit target (${targetX_m.toFixed(2)}, ${targetY_m.toFixed(2)}) at Z=0...`);
 
     // 1. Unit Conversions & Target Definition
     const v0_mps_sq = (velocityMPH * MPH_TO_MPS) * (velocityMPH * MPH_TO_MPS); // Use speed squared for constraint
@@ -50,7 +58,8 @@ const usePitchTrajectory = (velocityMPH: number, ivbInches: number, hbInches: nu
 
     // Release Point: Z is negative (away from camera/catcher)
     const P0 = { x: 0, y: RELEASE_HEIGHT_M, z: -RELEASE_DISTANCE_M };
-    const P_target = { x: 0, y: STRIKE_ZONE_CENTER_Y_M, z: 0 }; // Target Point (Center Strike Zone at Z=0)
+    // Target Point uses the passed-in coordinates
+    const P_target = { x: targetX_m, y: targetY_m, z: 0 };
 
     // 2. Calculate Displacement Vector
     const DeltaP = {
@@ -169,7 +178,7 @@ const usePitchTrajectory = (velocityMPH: number, ivbInches: number, hbInches: nu
       initialVelocity: v0,
     };
 
-  }, [velocityMPH, ivbInches, hbInches]); // Dependencies for useMemo
+  }, [velocityMPH, ivbInches, hbInches, targetX_m, targetY_m]); // Dependencies for useMemo
 
   return trajectoryData;
 };

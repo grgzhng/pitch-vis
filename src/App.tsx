@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Edges } from '@react-three/drei';
+import { OrbitControls, Edges, Sphere } from '@react-three/drei';
 import * as THREE from 'three';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import './App.css';
 import PitchControls from './components/PitchControls';
 import Baseball from './components/Baseball';
 import usePitchTrajectory from './hooks/usePitchTrajectory';
+import TargetPad from './components/TargetPad';
 
 // Conversion Constants
 const INCHES_TO_METERS = 0.0254;
@@ -69,20 +70,32 @@ function App() {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [animationTime, setAnimationTime] = useState<number>(0);
 
+  // Target State (in meters)
+  const [targetX, setTargetX] = useState<number>(0); // Horizontal center
+  const [targetY, setTargetY] = useState<number>((STRIKE_ZONE_TOP + STRIKE_ZONE_BOTTOM) / 2); // Vertical center of strike zone
+
   // State to hold camera info string
   const [cameraInfo, setCameraInfo] = useState<string>('Loading camera info...');
 
-  // Calculate Trajectory using the hook
-  const { getPositionAtTime, flightTime, releasePoint } = usePitchTrajectory(velocity, ivb, hb);
+  // Calculate Trajectory using the hook - Now includes target coordinates
+  const { getPositionAtTime, flightTime, releasePoint, initialVelocity } = usePitchTrajectory(
+    velocity,
+    ivb,
+    hb,
+    targetX, // Pass target X
+    targetY  // Pass target Y
+  );
 
   // Log trajectory data when inputs change
   useEffect(() => {
     console.log('[App] Trajectory Calculated:', {
       releasePoint,
       flightTime,
+      initialVelocity, // Log initial velocity too
+      targetPoint: { x: targetX, y: targetY, z: 0 },
       endPoint: getPositionAtTime(flightTime) // Calculate expected end point
     });
-  }, [releasePoint, flightTime, getPositionAtTime]); // Re-log if trajectory changes
+  }, [releasePoint, flightTime, getPositionAtTime, initialVelocity, targetX, targetY]); // Add dependencies
 
   // Handler to start the pitch animation
   const handleThrowPitch = useCallback(() => {
@@ -120,10 +133,10 @@ function App() {
   }), []);
 
   // --- Calculate Strike Zone Dimensions ---
-  const strikeZoneCenterY = useMemo(() => (STRIKE_ZONE_TOP + STRIKE_ZONE_BOTTOM) / 2, []);
-  const strikeZoneHeight = useMemo(() => STRIKE_ZONE_TOP - STRIKE_ZONE_BOTTOM, []);
+  const strikeZoneCenterY = (STRIKE_ZONE_TOP + STRIKE_ZONE_BOTTOM) / 2;
+  const strikeZoneHeight = STRIKE_ZONE_TOP - STRIKE_ZONE_BOTTOM;
   // Calculate strike zone center Z to align with plate center Z
-  const strikeZoneCenterZ = useMemo(() => -PLATE_POINT_LENGTH / 2, []);
+  const strikeZoneCenterZ = -PLATE_POINT_LENGTH / 2;
 
   // --- Create Strike Zone Geometry with Vertex Colors for Depth Gradient ---
   const strikeZoneGeometry = useMemo(() => {
@@ -158,7 +171,18 @@ function App() {
         setIvb={setIvb}
         hb={hb}
         setHb={setHb}
-        onThrowPitch={handleThrowPitch} // Pass the handler
+        onThrowPitch={handleThrowPitch}
+      />
+
+      {/* Target Pad Component - Pass strike zone dims */}
+      <TargetPad
+        targetX={targetX}
+        setTargetX={setTargetX}
+        targetY={targetY}
+        setTargetY={setTargetY}
+        strikeZoneWidth_m={STRIKE_ZONE_WIDTH}
+        strikeZoneBottom_m={STRIKE_ZONE_BOTTOM}
+        strikeZoneTop_m={STRIKE_ZONE_TOP}
       />
 
       {/* Display Camera Info */}
@@ -218,6 +242,12 @@ function App() {
 
         {/* Axes Helper */}
         <axesHelper args={[1]} /> {/* Args specifies the size of the lines */}
+
+        {/* Target Visualizer - Small red sphere at target location */}
+        <Sphere args={[0.03, 16, 16]} position={[targetX, targetY, 0]}>
+          <meshStandardMaterial color="red" emissive="red" emissiveIntensity={0.5} />
+        </Sphere>
+
       </Canvas>
     </div>
   );

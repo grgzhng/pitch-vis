@@ -8,6 +8,7 @@ interface PitchControlsProps {
   setIvb: (value: number) => void;
   hb: number;
   setHb: (value: number) => void;
+  // Target props are removed - handled by TargetPad
   onThrowPitch: () => void; // Function to call when the button is clicked
 }
 
@@ -15,6 +16,7 @@ const PitchControls: React.FC<PitchControlsProps> = ({
   velocity, setVelocity,
   ivb, setIvb,
   hb, setHb,
+  // Removed target props from destructuring
   onThrowPitch
 }) => {
   return (
@@ -30,7 +32,8 @@ const PitchControls: React.FC<PitchControlsProps> = ({
         color: 'white',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px'
+        gap: '10px',
+        width: '250px'
       }}
     >
       <h4>Pitch Controls</h4>
