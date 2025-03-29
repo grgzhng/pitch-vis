@@ -5,7 +5,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden; /* Prevent scrollbars */
-  background-color: #f0f0f0; /* Match canvas background */
+  background-color: #f0f0f0 !important; /* Match canvas background and force override */
 }
 
 #root {
@@ -20,7 +20,7 @@ body {
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* background-color: #242424; Remove dark mode background */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -39,8 +39,9 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  /* Remove display:flex and place-items:center if they exist and interfere */
+  /* display: flex; */
+  /* place-items: center; */
   min-width: 320px;
   min-height: 100vh;
 }
@@ -72,7 +73,7 @@ button:focus-visible {
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
-    background-color: #ffffff;
+    /* background-color: #ffffff; Remove light mode background */
   }
   a:hover {
     color: #747bff;
