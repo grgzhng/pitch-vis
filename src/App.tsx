@@ -77,13 +77,18 @@ function App() {
   // State to hold camera info string
   const [cameraInfo, setCameraInfo] = useState<string>('Loading camera info...');
 
-  // Calculate Trajectory using the hook - Now includes target coordinates
+  // Calculate the Z coordinate of the BACK point of the home plate
+  const targetPlateBackZ = 2 * PLATE_POINT_LENGTH;
+
+  // Calculate Trajectory using the hook - Now includes target coordinates AND target Z (back of plate)
   const { getPositionAtTime, flightTime, releasePoint, initialVelocity } = usePitchTrajectory(
     velocity,
     ivb,
     hb,
     targetX, // Pass target X
-    targetY  // Pass target Y
+    targetY, // Pass target Y
+    targetPlateBackZ // Pass target Z (back of plate)
+    // NOTE: usePitchTrajectory hook needs modification to accept and use targetZ
   );
 
   // Log trajectory data when inputs change
@@ -92,10 +97,10 @@ function App() {
       releasePoint,
       flightTime,
       initialVelocity, // Log initial velocity too
-      targetPoint: { x: targetX, y: targetY, z: 0 },
+      targetPoint: { x: targetX, y: targetY, z: targetPlateBackZ }, // Log target Z
       endPoint: getPositionAtTime(flightTime) // Calculate expected end point
     });
-  }, [releasePoint, flightTime, getPositionAtTime, initialVelocity, targetX, targetY]); // Add dependencies
+  }, [releasePoint, flightTime, getPositionAtTime, initialVelocity, targetX, targetY, targetPlateBackZ]); // Add dependencies
 
   // Handler to start the pitch animation
   const handleThrowPitch = useCallback(() => {
@@ -115,13 +120,13 @@ function App() {
   const homePlateShape = useMemo(() => {
     const shape = new THREE.Shape();
     const halfWidth = PLATE_WIDTH / 2;
-    // Start at back center, move clockwise
-    shape.moveTo(-halfWidth, -PLATE_SIDE_LENGTH); // Back left (relative to shape's origin)
-    shape.lineTo(halfWidth, -PLATE_SIDE_LENGTH);  // Back right
-    shape.lineTo(halfWidth, 0);                   // Right corner
-    shape.lineTo(0, PLATE_POINT_LENGTH);          // Front point
-    shape.lineTo(-halfWidth, 0);                  // Left corner
-    shape.closePath();                            // Close path back to back left
+    // Start at the back point, move counter-clockwise (when viewed from above)
+    shape.moveTo(0, -PLATE_POINT_LENGTH);       // Back point (towards catcher)
+    shape.lineTo(-halfWidth, 0);                // Left corner
+    shape.lineTo(-halfWidth, PLATE_SIDE_LENGTH); // Front left corner (towards pitcher)
+    shape.lineTo(halfWidth, PLATE_SIDE_LENGTH);  // Front right corner
+    shape.lineTo(halfWidth, 0);                  // Right corner
+    shape.closePath();                           // Close path back to back point
     return shape;
   }, []);
 
@@ -136,7 +141,8 @@ function App() {
   const strikeZoneCenterY = (STRIKE_ZONE_TOP + STRIKE_ZONE_BOTTOM) / 2;
   const strikeZoneHeight = STRIKE_ZONE_TOP - STRIKE_ZONE_BOTTOM;
   // Calculate strike zone center Z to align with plate center Z
-  const strikeZoneCenterZ = -PLATE_POINT_LENGTH / 2;
+  // Plate extends from Z=0 (back point) to Z=PLATE_TOTAL_DEPTH (front edge)
+  const strikeZoneCenterZ = PLATE_TOTAL_DEPTH / 2;
 
   // --- Create Strike Zone Geometry with Vertex Colors for Depth Gradient ---
   const strikeZoneGeometry = useMemo(() => {
@@ -219,8 +225,10 @@ function App() {
         </mesh>
 
         {/* Home Plate - Extruded */}
-        {/* Rotated flat on XZ plane, positioned slightly above floor */}
-        <mesh position={[0, 0.01, -PLATE_SIDE_LENGTH / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+        {/* Rotated flat on XZ plane, positioned with back point at Z=0 */}
+        {/* Local Y maps to World Z due to rotation. Point is at local Y=-PLATE_POINT_LENGTH */}
+        {/* So, position Z must be PLATE_POINT_LENGTH to put the point at world Z=0 */}
+        <mesh position={[0, 0.01, PLATE_POINT_LENGTH]} rotation={[-Math.PI / 2, 0, 0]}>
           {/* Use extrudeGeometry for thickness */}
           <extrudeGeometry args={[homePlateShape, homePlateExtrudeSettings]} />
           <meshStandardMaterial color="white" side={THREE.DoubleSide} />
@@ -243,8 +251,8 @@ function App() {
         {/* Axes Helper */}
         <axesHelper args={[1]} /> {/* Args specifies the size of the lines */}
 
-        {/* Target Visualizer - Small red sphere at target location */}
-        <Sphere args={[0.03, 16, 16]} position={[targetX, targetY, 0]}>
+        {/* Target Visualizer - Small red sphere at target location (back of plate) */}
+        <Sphere args={[0.03, 16, 16]} position={[targetX, targetY, targetPlateBackZ]}> {/* Updated Z position */}
           <meshStandardMaterial color="red" emissive="red" emissiveIntensity={0.5} />
         </Sphere>
 

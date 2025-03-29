@@ -30,26 +30,28 @@ interface PitchTrajectory {
 
 /**
  * Custom hook to calculate the trajectory of a baseball pitch, ensuring it
- * passes through the specified target point at z=0.
+ * passes through the specified target point (x, y, z).
  * Uses scene coordinates: Y=up, Z=towards camera/catcher (+Z towards catcher).
  *
  * @param velocityMPH Initial velocity magnitude in MPH.
  * @param ivbInches Induced Vertical Break in inches (spin-induced upward deviation).
  * @param hbInches Horizontal Break in inches (positive is right from catcher's view).
- * @param targetX_m Target X coordinate (meters) at the z=0 plane.
- * @param targetY_m Target Y coordinate (meters) at the z=0 plane.
+ * @param targetX_m Target X coordinate (meters) at the target plane.
+ * @param targetY_m Target Y coordinate (meters) at the target plane.
+ * @param targetZ_m Target Z coordinate (meters) of the target plane.
  * @returns An object containing the release point, flight time, initial velocity, and a function to get position at time t.
  */
 const usePitchTrajectory = (
   velocityMPH: number,
   ivbInches: number,
   hbInches: number,
-  targetX_m: number, // Added target X
-  targetY_m: number  // Added target Y
+  targetX_m: number,
+  targetY_m: number,
+  targetZ_m: number // Added target Z
 ): PitchTrajectory => {
 
   const trajectoryData = useMemo((): PitchTrajectory => {
-    console.log(`[usePitchTrajectory] Recalculating trajectory to hit target (${targetX_m.toFixed(2)}, ${targetY_m.toFixed(2)}) at Z=0...`);
+    console.log(`[usePitchTrajectory] Recalculating trajectory to hit target (${targetX_m.toFixed(2)}, ${targetY_m.toFixed(2)}, ${targetZ_m.toFixed(2)})...`); // Updated log
 
     // 1. Unit Conversions & Target Definition
     const v0_mps_sq = (velocityMPH * MPH_TO_MPS) * (velocityMPH * MPH_TO_MPS); // Use speed squared for constraint
@@ -58,14 +60,14 @@ const usePitchTrajectory = (
 
     // Release Point: Z is negative (away from camera/catcher)
     const P0 = { x: 0, y: RELEASE_HEIGHT_M, z: -RELEASE_DISTANCE_M };
-    // Target Point uses the passed-in coordinates
-    const P_target = { x: targetX_m, y: targetY_m, z: 0 };
+    // Target Point uses the passed-in coordinates, including Z
+    const P_target = { x: targetX_m, y: targetY_m, z: targetZ_m }; // Use targetZ_m
 
     // 2. Calculate Displacement Vector
     const DeltaP = {
-      x: P_target.x - P0.x, // Should be 0
+      x: P_target.x - P0.x, // Should be targetX_m
       y: P_target.y - P0.y,
-      z: P_target.z - P0.z, // Will be positive: 0 - (-RELEASE_DISTANCE_M)
+      z: P_target.z - P0.z, // Will be targetZ_m - (-RELEASE_DISTANCE_M)
     };
     const DeltaP_sq = DeltaP.x * DeltaP.x + DeltaP.y * DeltaP.y + DeltaP.z * DeltaP.z;
 
@@ -82,7 +84,7 @@ const usePitchTrajectory = (
     const a_total_y = a_magnus_y_spin - GRAVITY;
     const a = { x: a_magnus_x, y: a_total_y, z: 0 }; // Assuming no drag/magnus in Z direction
     const a_sq = a.x * a.x + a.y * a.y + a.z * a.z;
-    const DeltaP_dot_a = DeltaP.x * a.x + DeltaP.y * a.y + DeltaP.z * a.z; // = DeltaP.y * a.y
+    const DeltaP_dot_a = DeltaP.x * a.x + DeltaP.y * a.y + DeltaP.z * a.z; // Now includes DeltaP.x * a.x
 
     // 4. Solve for Flight Time (T) using kinematic constraints
     // Quadratic equation for u = T^2: A*u^2 + B*u + C = 0
@@ -162,9 +164,9 @@ const usePitchTrajectory = (
     };
 
     // Log final calculated values for verification
-    console.log('[usePitchTrajectory] Results:', {
+    console.log('[usePitchTrajectory] Results:', { // Update log
         releasePoint: P0,
-        targetPoint: P_target,
+        targetPoint: P_target, // P_target now includes targetZ_m
         flightTime,
         initialVelocity: v0,
         acceleration: a,
@@ -178,7 +180,7 @@ const usePitchTrajectory = (
       initialVelocity: v0,
     };
 
-  }, [velocityMPH, ivbInches, hbInches, targetX_m, targetY_m]); // Dependencies for useMemo
+  }, [velocityMPH, ivbInches, hbInches, targetX_m, targetY_m, targetZ_m]); // Added targetZ_m to dependencies
 
   return trajectoryData;
 };
