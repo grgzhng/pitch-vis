@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Edges, Sphere } from '@react-three/drei';
+import { OrbitControls, Sphere, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import './App.css';
 import PitchControls from './components/PitchControls';
 import Baseball from './components/Baseball';
@@ -144,28 +145,74 @@ function App() {
   // Plate extends from Z=0 (back point) to Z=PLATE_TOTAL_DEPTH (front edge)
   const strikeZoneCenterZ = PLATE_TOTAL_DEPTH / 2;
 
-  // --- Create Strike Zone Geometry with Vertex Colors for Depth Gradient ---
-  const strikeZoneGeometry = useMemo(() => {
-    const geometry = new THREE.BoxGeometry(STRIKE_ZONE_WIDTH, strikeZoneHeight, PLATE_TOTAL_DEPTH);
-    const positionAttribute = geometry.attributes.position;
-    const colors: number[] = [];
-    const color = new THREE.Color();
+  // --- Create Strike Zone Edges Geometry with Vertex Colors for Depth Gradient ---
+  const strikeZoneLineData = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
+    const halfW = STRIKE_ZONE_WIDTH / 2;
+    const halfH = strikeZoneHeight / 2;
+    const halfD = PLATE_TOTAL_DEPTH / 2;
 
-    const frontZ = PLATE_TOTAL_DEPTH / 2; // Relative Z for front face
-    const backZ = -PLATE_TOTAL_DEPTH / 2; // Relative Z for back face
+    // 8 corners of the strike zone box (relative to its center)
+    const vertices = new Float32Array([
+      // Front face (Z = +halfD)
+      -halfW, -halfH, halfD,  // 0: Front-Bottom-Left
+       halfW, -halfH, halfD,  // 1: Front-Bottom-Right
+       halfW,  halfH, halfD,  // 2: Front-Top-Right
+      -halfW,  halfH, halfD,  // 3: Front-Top-Left
+      // Back face (Z = -halfD)
+      -halfW, -halfH, -halfD, // 4: Back-Bottom-Left
+       halfW, -halfH, -halfD, // 5: Back-Bottom-Right
+       halfW,  halfH, -halfD, // 6: Back-Top-Right
+      -halfW,  halfH, -halfD  // 7: Back-Top-Left
+    ]);
 
-    for (let i = 0; i < positionAttribute.count; i++) {
-      const z = positionAttribute.getZ(i);
-      // Normalize z to 0 (back) - 1 (front) range
-      const normalizedZ = (z - backZ) / (frontZ - backZ);
-      // Simple gradient: white at front (z=max), black at back (z=min)
-      color.setScalar(normalizedZ);
-      colors.push(color.r, color.g, color.b);
+    // Calculate vertex colors (including alpha) based on Z position
+    const colorsWithAlpha: number[] = [];
+    const lightBlue = new THREE.Color(0x87cefa); // Lighter blue for back
+    const frontAlpha = 1; // Opacity at the front
+    const backAlpha = 0.3;  // Opacity at the back
+
+    for (let i = 0; i < vertices.length / 3; i++) {
+      const z = vertices[i * 3 + 2]; // Get the Z coordinate
+      // Normalize z: 0 for back (-halfD), 1 for front (+halfD)
+      const normalizedZ = (z + halfD) / PLATE_TOTAL_DEPTH;
+      // Interpolate color: lightBlue at normalizedZ=0, deepBlue at normalizedZ=1
+      const alpha = backAlpha + (frontAlpha - backAlpha) * normalizedZ;
+      // Push RGB and Alpha values
+      colorsWithAlpha.push(lightBlue.r, lightBlue.g, lightBlue.b, alpha);
     }
 
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    return geometry;
-  }, [strikeZoneHeight]); // Recalculate if height changes (width/depth are constants)
+    // Define the sequence of vertices for the front and back faces
+    // We need two separate sequences because Line draws a single continuous strip
+    const frontIndices = [0, 1, 2, 3, 0]; // Sequence for front face
+    const backIndices = [4, 5, 6, 7, 4];   // Sequence for back face
+
+    const generateLineData = (indexSequence: number[]) => {
+      const points: number[] = [];
+      const colors: [number, number, number, number][] = [];
+      for (const index of indexSequence) {
+        if (index === undefined) continue; // Safety check
+
+        // Add vertex position
+        points.push(vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]);
+        // Add vertex color
+        colors.push([colorsWithAlpha[index * 4], colorsWithAlpha[index * 4 + 1], colorsWithAlpha[index * 4 + 2], colorsWithAlpha[index * 4 + 3]]);
+      }
+      // Log number of points (segments = points - 1)
+      console.log("Generated points:", points.length / 3, "points ->", points.length / 3 -1 , "segments");
+      return { points, colors };
+    };
+
+    // Generate data for front and back lines separately
+    const frontLineData = generateLineData(frontIndices);
+    const backLineData = generateLineData(backIndices);
+
+    // If you want the connecting lines, we need a different structure (e.g., LineSegments)
+    // For now, we'll just return data for front and back
+
+    // NOTE: This return value changes shape. The rendering part needs adjustment.
+    return { frontLineData, backLineData };
+  }, [strikeZoneHeight]); // Dependency array
 
   return (
     <div id="scene-container">
@@ -203,58 +250,54 @@ function App() {
         {/* Controls use the initialCameraTarget */}
         <CameraInfoLogger onCameraChange={setCameraInfo} initialTarget={initialCameraTarget} />
 
-        {/* Lighting */}
-        <ambientLight intensity={0.8} />
-        <directionalLight position={[5, 10, -10]} intensity={1} />
-
-        {/* --- Re-enabled Animated Baseball Component --- */}
-        <Baseball
-          getPositionAtTime={getPositionAtTime}
-          flightTime={flightTime}
-          releasePoint={releasePoint}
-          isAnimating={isAnimating}
-          onAnimationComplete={handleAnimationComplete}
-          animationTime={animationTime}
-          setAnimationTime={setAnimationTime}
-        />
-
-        {/* --- Re-enabled Floor Placeholder --- */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -50]} receiveShadow>
-          <planeGeometry args={[50, 100]} /> {/* Made much larger */}
-          <meshStandardMaterial color="lightgreen" />
-        </mesh>
-
-        {/* Home Plate - Extruded */}
-        {/* Rotated flat on XZ plane, positioned with back point at Z=0 */}
-        {/* Local Y maps to World Z due to rotation. Point is at local Y=-PLATE_POINT_LENGTH */}
-        {/* So, position Z must be PLATE_POINT_LENGTH to put the point at world Z=0 */}
-        <mesh position={[0, 0.01, PLATE_POINT_LENGTH]} rotation={[-Math.PI / 2, 0, 0]}>
-          {/* Use extrudeGeometry for thickness */}
-          <extrudeGeometry args={[homePlateShape, homePlateExtrudeSettings]} />
-          <meshStandardMaterial color="white" side={THREE.DoubleSide} />
-        </mesh>
-
-        {/* Strike Zone Box - Aligned with Plate Depth & Vertex Colors */}
-        <mesh position={[0, strikeZoneCenterY, strikeZoneCenterZ]}> {/* Updated Z position */}
-            {/* Use the pre-calculated geometry with vertex colors */}
-            <primitive object={strikeZoneGeometry} />
-            {/* Material needs vertexColors enabled - reduced opacity slightly */}
-            <meshStandardMaterial transparent={true} opacity={0.3} side={THREE.DoubleSide} vertexColors />
-            {/* Re-add Edges for sharp outlines */}
-            <Edges
-                scale={1} // Match the scale of the box
-                threshold={15} // Angle threshold for edges
-                color="black"
-            />
-        </mesh>
-
-        {/* Axes Helper */}
-        <axesHelper args={[1]} /> {/* Args specifies the size of the lines */}
-
-        {/* Target Visualizer - Small red sphere at target location (back of plate) */}
-        <Sphere args={[0.03, 16, 16]} position={[targetX, targetY, targetPlateBackZ]}> {/* Updated Z position */}
-          <meshStandardMaterial color="red" emissive="red" emissiveIntensity={0.5} />
-        </Sphere>
+        {/* Wrap scene content in EffectComposer */}
+        <EffectComposer>
+          <ambientLight intensity={0.8} />
+          <directionalLight position={[5, 10, -10]} intensity={1} />
+          <Baseball
+            getPositionAtTime={getPositionAtTime}
+            flightTime={flightTime}
+            releasePoint={releasePoint}
+            isAnimating={isAnimating}
+            onAnimationComplete={handleAnimationComplete}
+            animationTime={animationTime}
+            setAnimationTime={setAnimationTime}
+          />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -50]} receiveShadow>
+            <planeGeometry args={[50, 100]} />
+            <meshStandardMaterial color="lightgreen" />
+          </mesh>
+          <mesh position={[0, 0.01, PLATE_POINT_LENGTH]} rotation={[-Math.PI / 2, 0, 0]}>
+            <extrudeGeometry args={[homePlateShape, homePlateExtrudeSettings]} />
+            <meshStandardMaterial color="white" side={THREE.DoubleSide} />
+          </mesh>
+          {/* Render Front Lines */}
+          <Line
+            points={strikeZoneLineData.frontLineData.points}
+            vertexColors={strikeZoneLineData.frontLineData.colors}
+            lineWidth={5}
+            transparent={true}
+            position={[0, strikeZoneCenterY, strikeZoneCenterZ]}
+          />
+          {/* Render Back Lines */}
+          <Line
+            points={strikeZoneLineData.backLineData.points}
+            vertexColors={strikeZoneLineData.backLineData.colors}
+            lineWidth={5}
+            transparent={true}
+            position={[0, strikeZoneCenterY, strikeZoneCenterZ]}
+          />
+          <axesHelper args={[1]} />
+          <Sphere args={[0.03, 16, 16]} position={[targetX, targetY, targetPlateBackZ]}>
+            <meshStandardMaterial color="red" emissive="red" emissiveIntensity={0.5} />
+          </Sphere>
+          <Bloom
+            intensity={1.5} // Adjust intensity of the glow
+            luminanceThreshold={0.6} // How bright a pixel needs to be to bloom
+            luminanceSmoothing={0.8} // Smoothness of the threshold
+            height={300} // Lower resolution for performance & softer bloom
+          />
+        </EffectComposer>
 
       </Canvas>
     </div>
