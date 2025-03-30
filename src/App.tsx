@@ -147,7 +147,6 @@ function App() {
 
   // --- Create Strike Zone Edges Geometry with Vertex Colors for Depth Gradient ---
   const strikeZoneLineData = useMemo(() => {
-    const geometry = new THREE.BufferGeometry();
     const halfW = STRIKE_ZONE_WIDTH / 2;
     const halfH = strikeZoneHeight / 2;
     const halfD = PLATE_TOTAL_DEPTH / 2;
