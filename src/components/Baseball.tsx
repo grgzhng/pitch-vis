@@ -31,7 +31,7 @@ const Baseball: React.FC<BaseballProps> = ({
   // Ref to access the mesh object
   const meshRef = useRef<THREE.Mesh>(null!);
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (!meshRef.current) return; // Guard clause
 
     let targetPosition: { x: number; y: number; z: number };
