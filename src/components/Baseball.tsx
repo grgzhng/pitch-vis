@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import React, { useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
 
 interface BaseballProps {
   // Function to get position at a given time
@@ -26,7 +26,7 @@ const Baseball: React.FC<BaseballProps> = ({
   isAnimating,
   onAnimationComplete,
   animationTime,
-  setAnimationTime
+  setAnimationTime,
 }) => {
   // Ref to access the mesh object
   const meshRef = useRef<THREE.Mesh>(null!);
@@ -37,41 +37,46 @@ const Baseball: React.FC<BaseballProps> = ({
     let targetPosition: { x: number; y: number; z: number };
 
     if (isAnimating) {
-        // --- Animation is active ---
-        const newTime = Math.min(animationTime + delta, flightTime > 0 ? flightTime : 0); // Calculate new time, clamp at end, handle flightTime=0
+      // --- Animation is active ---
+      const newTime = Math.min(
+        animationTime + delta,
+        flightTime > 0 ? flightTime : 0
+      ); // Calculate new time, clamp at end, handle flightTime=0
 
-        // Only update state if time actually changed
-        if (newTime !== animationTime) {
-            setAnimationTime(newTime);
-        }
+      // Only update state if time actually changed
+      if (newTime !== animationTime) {
+        setAnimationTime(newTime);
+      }
 
-        targetPosition = getPositionAtTime(newTime);
+      targetPosition = getPositionAtTime(newTime);
 
-        // Log periodically or on first frame
-        if (Math.random() < 0.05 || animationTime === 0) {
-            console.log(`[Baseball] Animating. Time: ${newTime.toFixed(2)}s, Position:`, targetPosition);
-        }
-
-        // Check for completion
-        if (newTime >= flightTime && flightTime > 0) {
-            console.log('[Baseball] Animation ended. Final Position:', targetPosition);
-            onAnimationComplete();
-        }
+      // Check for completion
+      if (newTime >= flightTime && flightTime > 0) {
+        console.log(
+          "[Baseball] Animation ended. Final Position:",
+          targetPosition
+        );
+        onAnimationComplete();
+      }
     } else {
-        // --- Animation is not active ---
-        if (animationTime >= flightTime && flightTime > 0) {
-            // If previously completed, stay at end point
-            targetPosition = getPositionAtTime(flightTime);
-        } else {
-            // Otherwise, stay/reset to release point
-            targetPosition = releasePoint;
-            // Log if resetting to start position
-            // console.log('[Baseball] Not animating, ensuring position at release point:', targetPosition);
-        }
+      // --- Animation is not active ---
+      if (animationTime >= flightTime && flightTime > 0) {
+        // If previously completed, stay at end point
+        targetPosition = getPositionAtTime(flightTime);
+      } else {
+        // Otherwise, stay/reset to release point
+        targetPosition = releasePoint;
+        // Log if resetting to start position
+        // console.log('[Baseball] Not animating, ensuring position at release point:', targetPosition);
+      }
     }
 
     // Set position *once* per frame based on calculated target
-    meshRef.current.position.set(targetPosition.x, targetPosition.y, targetPosition.z);
+    meshRef.current.position.set(
+      targetPosition.x,
+      targetPosition.y,
+      targetPosition.z
+    );
   });
 
   return (

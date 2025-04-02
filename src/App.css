@@ -13,6 +13,16 @@
   position: relative;
 }
 
+/* Fix for wheel event passive listener warnings */
+canvas {
+  touch-action: none;
+}
+
+/* Three.js renderers generate canvas automatically */
+#scene-container > canvas {
+  outline: none;
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;
